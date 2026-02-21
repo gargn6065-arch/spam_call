@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scam Call Detection Demo</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; }
+        #transcript { border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: scroll; background: #f9f9f9; }
+        #risk-meter { height: 20px; width: 100%; background: #eee; margin: 10px 0; border-radius: 10px; }
+        #risk-fill { height: 100%; width: 0%; background: green; border-radius: 10px; transition: width 0.5s; }
+        #alert { display: none; background: red; color: white; padding: 10px; text-align: center; font-weight: bold; margin-top: 10px; border-radius: 5px; }
+        .controls { margin-top: 10px; }
+        input[type="text"] { width: 80%; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Scam Call Detection</h1>
+    <div id="transcript"></div>
+    <div id="risk-meter"><div id="risk-fill"></div></div>
+    <div id="risk-score">Risk Score: 0.0</div>
+    <div id="alert">🚨 HIGH RISK SCAM DETECTED 🚨<br><span id="reason"></span></div>
+
+    <div class="controls">
+        <input type="text" id="input-text" placeholder="Type call transcript here...">
+        <button onclick="sendText()">Send</button>
+    </div>
+
+    <hr>
+    <h3>Common Scam Types</h3>
+    <div id="education">Loading...</div>
+
+    <hr>
+    <h3>Report False Positive</h3>
+    <textarea id="report-feedback" placeholder="Why is this a false positive?"></textarea><br>
+    <button onclick="sendReport()">Report</button>
+    <div id="report-status"></div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8000/ws/call');
+        const transcriptDiv = document.getElementById('transcript');
+        const riskFill = document.getElementById('risk-fill');
+        const riskScoreText = document.getElementById('risk-score');
+        const alertDiv = document.getElementById('alert');
+        const reasonSpan = document.getElementById('reason');
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            transcriptDiv.innerText = data.transcript;
+            const score = data.risk_score;
+            riskFill.style.width = (score * 100) + '%';
+            riskScoreText.innerText = 'Risk Score: ' + score.toFixed(2);
+
+            if (score < 0.4) riskFill.style.background = 'green';
+            else if (score < 0.7) riskFill.style.background = 'orange';
+            else riskFill.style.background = 'red';
+
+            if (data.alert) {
+                alertDiv.style.display = 'block';
+                reasonSpan.innerText = data.reason;
+            } else {
+                alertDiv.style.display = 'none';
+            }
+        };
+
+        function sendText() {
+            const input = document.getElementById('input-text');
+            if (input.value) {
+                ws.send(JSON.stringify({text: input.value}));
+                input.value = '';
+            }
+        }
+
+        async function loadEducation() {
+            const response = await fetch('http://localhost:8000/education');
+            const data = await response.json();
+            const eduDiv = document.getElementById('education');
+            eduDiv.innerHTML = data.map(item => `
+                <div>
+                    <strong>${item.type}</strong>: ${item.description}
+                    <ul>${item.tips.map(tip => `<li>${tip}</li>`).join('')}</ul>
+                </div>
+            `).join('');
+        }
+
+        async function sendReport() {
+            const feedback = document.getElementById('report-feedback').value;
+            const response = await fetch('http://localhost:8000/report', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    reported_as: 'false_positive',
+                    user_feedback: feedback
+                })
+            });
+            const result = await response.json();
+            document.getElementById('report-status').innerText = result.message;
+        }
+
+        loadEducation();
+    </script>
+</body>
+</html>

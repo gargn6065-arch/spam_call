@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+backend/test.db
+backend/server.log
+backend/backend/test.db
+backend/backend/server.log
+.pytest_cache/
+*.log
